@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>BusTalk TMSA 2.0</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <link rel="manifest" href='data:application/json;base64,eyJuYW1lIjoiQnVzVGFsayBUTVNBIiwic2hvcnRfbmFtZSI6IkJ1c1RhbGsiLCJzdGFydF91cmwiOiIuIiwiZGlzcGxheSI6InN0YW5kYWxvbmUiLCJiYWNrZ3JvdW5kX2NvbG9yIjoiIzFhMWExYSIsInRoZW1lX2NvbG9yIjoiIzFhMWExYSIsImljb25zIjpbeyJzcmMiOiJpY29uLTE1Mi5wbmciLCJzaXplcyI6IjE1MngxNTIiLCJ0eXBlIjoiaW1hZ2UvcG5nIn0seyJzcmMiOiJpY29uLTE5Mi5wbmciLCJzaXplcyI6IjE5MngxOTIiLCJ0eXBlIjoiaW1hZ2UvcG5nIn1dfQ=='>
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <style>
+        [x-cloak] { display: none !important; }
+        body { background-color: #1a1a1a; user-select: none; -webkit-user-select: none; padding-top: env(safe-area-inset-top); }
+        .ptt-active { background-color: #ef4444 !important; transform: scale(0.92); box-shadow: 0 0 30px rgba(239, 68, 68, 0.8); }
+        .ptt-receiving { background-color: #10b981 !important; box-shadow: 0 0 40px rgba(16, 185, 129, 0.9); animation: pulse-green 1s infinite; }
+        @keyframes pulse-green { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+        .luz-parada { box-shadow: 0 0 15px #10b981, inset 0 0 10px #10b981; background-color: #10b981; color: black; }
+        .alerta-lleno { background-color: #ea580c; animation: pulse-alert 2s infinite; border-color: #c2410c; }
+        .alerta-retraso { background-color: #ca8a04; animation: pulse-alert 2s infinite; border-color: #a16207; }
+        .alerta-averia { background-color: #dc2626; animation: pulse-alert 1s infinite; border-color: #991b1b; }
+        @keyframes pulse-alert { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body x-data="busTalkApp()" x-init="init()" class="text-white font-sans h-screen flex flex-col overflow-hidden">
+
+    <div x-show="!sesionIniciada" class="fixed inset-0 bg-black z-[100] flex flex-col items-center justify-center p-6 backdrop-blur-md">
+        <div class="bg-gray-900 p-8 rounded-[2rem] w-full max-w-sm text-center shadow-2xl border border-gray-800">
+            <h2 class="text-2xl font-black mb-6 uppercase tracking-wider text-white">BusTalk TMSA</h2>
+            
+            <button @click="loginGoogle()" class="w-full bg-white text-black font-black py-4 mb-3 rounded-2xl active:scale-95 transition">GOOGLE LOGIN</button>
+            <input type="email" x-model="emailInput" placeholder="Correo" class="w-full p-4 mb-2 bg-gray-800 rounded-2xl border border-gray-700 text-center">
+            <input type="password" x-model="passInput" placeholder="Contraseña" class="w-full p-4 mb-4 bg-gray-800 rounded-2xl border border-gray-700 text-center">
+            <button @click="loginEmail()" class="w-full bg-blue-600 font-black py-4 mb-4 rounded-2xl active:scale-95 transition">ENTRAR</button>
+            <button @click="entrarAnonimo()" class="text-gray-500 underline text-xs">Acceso anónimo</button>
+        </div>
+    </div>
+
+    <header class="p-4 bg-black flex justify-between items-center border-b border-gray-800 z-10">
+        <div class="flex flex-col">
+            <div class="flex items-center space-x-2">
+                <span class="bg-yellow-500 text-black font-black px-2 py-1 rounded-md text-sm" x-text="'BUS ' + miBus"></span>
+                <h1 class="text-lg font-black italic text-gray-300">Bus<span class="text-yellow-500">Talk</span></h1>
+            </div>
+        </div>
+        <span class="text-[8px] opacity-20">medbasha</span>
+    </header>
+
+    <main class="flex-1 overflow-y-auto p-3 space-y-3 bg-[#121212] hide-scrollbar pb-6">
+        </main>
+
+    <footer class="p-4 bg-black rounded-t-[2.5rem] border-t border-gray-800 relative z-20">
+        </footer>
+
+    <script>
+        const firebaseConfig = { /* Tus credenciales */ };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        function busTalkApp() {
+            return {
+                sesionIniciada: false, emailInput: '', passInput: '',
+                miBusInput: '', miLineaInput: '', miBus: '', miLinea: '', 
+                // ... (toda tu lógica original de busTalkApp) ...
+
+                init() {
+                    auth.onAuthStateChanged(user => { if (user) this.sesionIniciada = true; });
+                },
+                loginGoogle() { auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); },
+                loginEmail() { auth.signInWithEmailAndPassword(this.emailInput, this.passInput).catch(e => alert(e.message)); },
+                entrarAnonimo() { auth.signInAnonymously(); }
+                // ... (el resto de tus funciones)
+            }
+        }
+    </script>
+</body>
+</html>
